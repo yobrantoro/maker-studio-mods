@@ -348,12 +348,14 @@ ctx.events.registerCommand({
   // parse() recovers params so the command stays named + re-editable.
   parse: (t) => { const m = /^pbCameraScrollTo\((-?\d+), (-?\d+)(?:, (\d+))?\)$/.exec(t);
     return m ? { target: { mode: "direct", mapId: 0, x: +m[1], y: +m[2], varMapId: 1, varX: 1, varY: 1 }, useSpeed: m[3] != null, speed: +m[3] || 4 } : null; },
-  summary: (p) => `(${p.target.x}, ${p.target.y})`,
+  // 2nd arg = where the command sits: {mapId, eventId, pageIndex, index, count, indent}.
+  // index === 0 is first, index === count - 1 is last, indent > 0 means nested.
+  summary: (p, ctx) => `(${p.target.x}, ${p.target.y}) #${ctx.index + 1}/${ctx.count}`,
 });
 // Omit `fields` for a freeform script command (params.script).
 // Field types: number, text, select, checkbox, switch, variable,
 //   coordinate (Transfer-Player Direct/Variables source), record (recordKind),
-//   event, graphic (subfolder), audio (category). Any field: disabled/hidden(params).
+//   event, graphic (subfolder), audio (category). Any field: disabled/hidden(params, ctx).
 // Appears on your own named puzzle-icon tab (from `page`) in the picker; stored
 // as a code-355 Script command running the literal text — no runtime dispatcher.
 ```

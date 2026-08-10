@@ -674,15 +674,38 @@ export interface CoordinateValue {
   varY: number;
 }
 
+/** Where a mod command sits in the editor while its script / summary / field
+ *  callbacks run. Handed to every one of them as a second argument.
+ *
+ *  `index` is the command's flat position in the page's command list — the same
+ *  list `events.getFull().pages[pageIndex].list` returns, so continuation rows
+ *  (401 text lines, 509 move sub-commands…) count as entries. `indent` tells how
+ *  deep it is nested inside conditional branches / loops. */
+export interface ModCommandContext {
+  mapId: number;
+  /** Null in the Database → Common Events editor (no map event). */
+  eventId: number | null;
+  /** Null in the Database → Common Events editor (a common event has no pages). */
+  pageIndex: number | null;
+  /** Flat position in the command list, 0-based. */
+  index: number;
+  /** Entries in the list, trailing code-0 terminator excluded — so `index === 0`
+   *  is first and `index === count - 1` is last. While the command is being
+   *  inserted this describes where it will land, itself included. */
+  count: number;
+  /** Nesting depth (0 at the top level of the page). */
+  indent: number;
+}
+
 /** A declarative field in a mod-defined event command's editor UI. Each type
  *  maps to a native editor control (number box, dropdown, switch/variable
  *  picker, map picker, entity picker, graphic/audio browser…) so the dialog
  *  matches the built-in command dialogs. `disabled` greys the control out, and
  *  `hidden` removes it entirely, based on the current params (e.g. hide "speed"
- *  until a "set speed" box is on). */
+ *  until a "set speed" box is on) or on where the command sits (`ctx`). */
 export type ModCommandField = {
-  disabled?: (params: Record<string, unknown>) => boolean;
-  hidden?: (params: Record<string, unknown>) => boolean;
+  disabled?: (params: Record<string, unknown>, ctx: ModCommandContext) => boolean;
+  hidden?: (params: Record<string, unknown>, ctx: ModCommandContext) => boolean;
 } & (
   | { type: "number"; key: string; label: string; min?: number; max?: number; step?: number; default?: number }
   | { type: "text"; key: string; label: string; default?: string }
@@ -721,14 +744,15 @@ export interface ModCommandDef {
   fields?: ModCommandField[];
   /** Build the Script command text from the params. Stored verbatim and run
    *  in-game directly. Required when `fields` are given; for a fields-less
-   *  command the editor stores `params.script` as-is. */
-  script?: (params: ModCommandParams) => string;
+   *  command the editor stores `params.script` as-is. `ctx` says which event /
+   *  page / position the command is being written at. */
+  script?: (params: ModCommandParams, ctx: ModCommandContext) => string;
   /** Recognize a previously generated script back into params so the command
    *  keeps its name and reopens its custom form. Return null if not this
    *  command. Without it, an inserted command becomes an ordinary Script. */
   parse?: (scriptText: string) => ModCommandParams | null;
   /** Optional one-line summary shown after the name in the command list. */
-  summary?: (params: ModCommandParams) => string;
+  summary?: (params: ModCommandParams, ctx: ModCommandContext) => string;
 }
 
 /** Info passed to advanced overlay render callbacks. */

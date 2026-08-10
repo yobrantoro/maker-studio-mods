@@ -107,6 +107,16 @@ Cuando hay un salto de versión major, este archivo recibe una sección con la n
   `"Terrain Tags"` pasa a `terrain-tags`) y quedándose con los 8 primeros. Aditivo: si lo omites
   nada cambia — los tags los elige quien mantiene el registro al revisar, como hasta ahora.
 
+- **Contexto de colocación de los comandos de mod** (`ModCommandContext`,
+  `ctx.events.registerCommand`). `script`, `summary` y los predicados `disabled` / `hidden` de un
+  campo reciben ahora un segundo argumento que dice dónde está el comando: `{ mapId, eventId,
+  pageIndex, index, count, indent }` (`eventId` / `pageIndex` son `null` en Base de datos →
+  Eventos comunes). `index === 0` es el primer comando, `index === count - 1` el último, e
+  `indent > 0` significa que está anidado dentro de una condición o un bucle; mientras se inserta
+  el comando, el contexto describe el sitio en el que va a caer. Aditivo — los callbacks que
+  ignoran el segundo argumento no cambian. Consulta [api-reference.md](api-reference.md)
+  (`events.registerCommand`).
+
 - **Pestañas de comandos de mod** (`ModCommandDef`, `ctx.events.registerCommand`). `page` ahora
   es funcional: titula la pestaña propia del comando en el selector de comandos de evento, y los
   comandos que comparten la misma cadena `page` se agrupan en una sola pestaña con nombre (omítelo y

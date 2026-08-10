@@ -908,9 +908,9 @@ interface ModCommandDef {
   page?: string;                           // título de la pestaña del selector (los comandos que lo comparten se agrupan; por defecto el id del mod)
   pageDescription?: string;                // franja de una línea bajo la pestaña activa
   fields?: ModCommandField[];              // omitir → textarea de script libre (params.script)
-  script?: (params: ModCommandParams) => string;  // el Ruby almacenado y ejecutado en el juego
+  script?: (params: ModCommandParams, ctx: ModCommandContext) => string;  // el Ruby almacenado y ejecutado en el juego
   parse?: (scriptText: string) => ModCommandParams | null;  // recupera params para reeditar
-  summary?: (params: ModCommandParams) => string; // etiqueta de una línea en la lista de comandos
+  summary?: (params: ModCommandParams, ctx: ModCommandContext) => string; // etiqueta de una línea en la lista de comandos
 }
 ```
 
@@ -928,8 +928,41 @@ pestaña con el nombre del id de tu mod.
 **Campos declarativos** (`def.fields`) se renderizan con los propios controles y selectors del
 editor, de modo que el diálogo coincide con los diálogos de comando incluidos. El `key` de cada
 campo se convierte en una propiedad del objeto `params` que se pasa a `script`, `parse` y
-`summary`. Cualquier campo puede definir `disabled: (params) => boolean` para grisear su control, o
-`hidden: (params) => boolean` para eliminarlo por completo, condicionalmente.
+`summary`. Cualquier campo puede definir `disabled: (params, ctx) => boolean` para grisear su
+control, o `hidden: (params, ctx) => boolean` para eliminarlo por completo, condicionalmente.
+
+**Dónde está colocado el comando** (`ctx`) — `script`, `summary` y los predicados
+`disabled`/`hidden` de los campos reciben un segundo argumento que describe el sitio que ocupa el
+comando dentro del evento:
+
+```ts
+interface ModCommandContext {
+  mapId: number;
+  eventId: number | null;    // null en Base de datos → Eventos comunes
+  pageIndex: number | null;  // null en Base de datos → Eventos comunes
+  index: number;             // posición plana en la lista de comandos de la página, base 0
+  count: number;             // entradas de la lista, sin contar el terminador final
+  indent: number;            // profundidad de anidamiento (0 en el nivel superior de la página)
+}
+```
+
+Así, `ctx.index === 0` es el primer comando y `ctx.index === ctx.count - 1` el último;
+`ctx.indent > 0` significa que está dentro de una condición o un bucle. La granularidad de
+`index`/`count` coincide con `events.getFull().pages[pageIndex].list`, así que las filas de
+continuación (líneas de texto 401, sub-comandos de movimiento 509…) cuentan como entradas.
+Mientras se está insertando el comando, el contexto describe el sitio en el que va a caer,
+incluyéndose a sí mismo en `count`. Ambos callbacks se vuelven a ejecutar cada vez que el editor
+relee el comando, así que un comando movido vuelve a renderizar su resumen con la nueva posición
+— pero el **Ruby almacenado solo se reescribe al editar el formulario**: arrastrar un comando a
+otro sitio no vuelve a ejecutar `script`.
+
+```js
+// El mismo comando genera Ruby distinto según dónde se haya soltado.
+script: (p, ctx) => ctx.index === 0
+  ? `pbSceneStart(${p.id | 0})`
+  : `pbSceneStep(${p.id | 0})`,
+summary: (p, ctx) => `página ${(ctx.pageIndex ?? 0) + 1}, #${ctx.index + 1}/${ctx.count}`,
+```
 
 | `type`     | Renderiza | Valor almacenado |
 |------------|-----------|------------------|

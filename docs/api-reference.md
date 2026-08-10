@@ -909,9 +909,9 @@ interface ModCommandDef {
   page?: string;                           // picker tab title (commands sharing it group together; falls back to the mod id)
   pageDescription?: string;                // one-line strip shown beneath the active tab
   fields?: ModCommandField[];              // omit → freeform script textarea (params.script)
-  script?: (params: ModCommandParams) => string;  // the Ruby stored & run in-game
+  script?: (params: ModCommandParams, ctx: ModCommandContext) => string;  // the Ruby stored & run in-game
   parse?: (scriptText: string) => ModCommandParams | null;  // recover params to re-edit
-  summary?: (params: ModCommandParams) => string; // one-line label in the command list
+  summary?: (params: ModCommandParams, ctx: ModCommandContext) => string; // one-line label in the command list
 }
 ```
 
@@ -929,8 +929,42 @@ commands group under a tab labelled with your mod id.
 **Declarative fields** (`def.fields`) render with the editor's own controls and
 selectors, so the dialog matches the built-in command dialogs. Each field's
 `key` becomes a property on the `params` object passed to `script`, `parse`, and
-`summary`. Any field may set `disabled: (params) => boolean` to grey its control
-out, or `hidden: (params) => boolean` to remove it entirely, conditionally.
+`summary`. Any field may set `disabled: (params, ctx) => boolean` to grey its
+control out, or `hidden: (params, ctx) => boolean` to remove it entirely,
+conditionally.
+
+**Where the command sits** (`ctx`) — `script`, `summary` and the field
+`disabled`/`hidden` predicates all receive a second argument describing the
+command's place in the event:
+
+```ts
+interface ModCommandContext {
+  mapId: number;
+  eventId: number | null;    // null in Database → Common Events
+  pageIndex: number | null;  // null in Database → Common Events
+  index: number;             // flat position in the page's command list, 0-based
+  count: number;             // entries in the list, trailing terminator excluded
+  indent: number;            // nesting depth (0 at the page's top level)
+}
+```
+
+So `ctx.index === 0` is the first command and `ctx.index === ctx.count - 1` the
+last; `ctx.indent > 0` means it sits inside a conditional branch or loop. The
+`index`/`count` granularity matches `events.getFull().pages[pageIndex].list`, so
+continuation rows (401 text lines, 509 move sub-commands…) count as entries.
+While the command is being inserted the context describes the spot it is about
+to land on, itself included in `count`. Both callbacks re-run whenever the
+editor re-reads the command, so a moved command re-renders its summary with the
+new position — but the **stored Ruby is only written when the form is edited**:
+dragging a command elsewhere does not re-run `script`.
+
+```js
+// Same command, different Ruby depending on where it was dropped.
+script: (p, ctx) => ctx.index === 0
+  ? `pbSceneStart(${p.id | 0})`
+  : `pbSceneStep(${p.id | 0})`,
+summary: (p, ctx) => `page ${(ctx.pageIndex ?? 0) + 1}, #${ctx.index + 1}/${ctx.count}`,
+```
 
 | `type`     | Renders | Stored value |
 |------------|---------|--------------|

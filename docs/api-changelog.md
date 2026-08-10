@@ -100,6 +100,16 @@ When a major bump happens, this file gets a section with the new shape and a lin
   Tags"` becomes `terrain-tags`) and keeping the first 8. Additive: omit it and nothing changes
   — the registry maintainer picks your tags on review, as before.
 
+- **Mod command placement context** (`ModCommandContext`, `ctx.events.registerCommand`).
+  `script`, `summary` and a field's `disabled` / `hidden` predicates now receive a second
+  argument saying where the command sits: `{ mapId, eventId, pageIndex, index, count,
+  indent }` (`eventId` / `pageIndex` are `null` in Database → Common Events). `index === 0`
+  is the first command, `index === count - 1` the last, and `indent > 0` means it is nested
+  inside a conditional branch or loop; while the command is being inserted the context
+  describes the spot it is about to land on. Additive — callbacks that ignore the second
+  argument are unaffected. See [api-reference.md](./api-reference.md)
+  (`events.registerCommand`).
+
 - **Mod command tabs** (`ModCommandDef`, `ctx.events.registerCommand`). `page` is now
   functional: it titles the command's own tab in the event-command picker, and commands
   sharing the same `page` string collect under one named tab (omit it and they group under

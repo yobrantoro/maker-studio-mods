@@ -109,10 +109,13 @@ its own named tab in the command picker; set `page` to title that tab (commands
 sharing a `page` collect under it) and `pageDescription` for its one-line strip.
 
 Each mod command is saved as a standard RMXP Script command (code 355) whose
-`parameters[0]` is the literal Ruby that the command's `script(params)` returns
-(e.g. `pbCameraScrollTo(0, -4)`). This keeps the map's `.rxdata` round-tripping
-unchanged, passes `validateEvent` (355 is a known code), and runs in-game like
-any other event script — there is no runtime dispatcher or handler to register.
+`parameters[0]` is the literal Ruby that the command's `script(params, ctx)`
+returns (e.g. `pbCameraScrollTo(0, -4)`). This keeps the map's `.rxdata`
+round-tripping unchanged, passes `validateEvent` (355 is a known code), and runs
+in-game like any other event script — there is no runtime dispatcher or handler
+to register. The `ctx` argument says which event, page and list position the
+command is being written at, so the generated Ruby can depend on where the map
+maker dropped it.
 
 ## Editing an event's commands (not bus events)
 

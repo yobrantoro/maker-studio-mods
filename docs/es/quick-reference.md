@@ -345,12 +345,14 @@ ctx.events.registerCommand({
   // parse() recupera los params para que el comando siga con nombre + reeditable.
   parse: (t) => { const m = /^pbCameraScrollTo\((-?\d+), (-?\d+)(?:, (\d+))?\)$/.exec(t);
     return m ? { target: { mode: "direct", mapId: 0, x: +m[1], y: +m[2], varMapId: 1, varX: 1, varY: 1 }, useSpeed: m[3] != null, speed: +m[3] || 4 } : null; },
-  summary: (p) => `(${p.target.x}, ${p.target.y})`,
+  // 2º arg = dónde está el comando: {mapId, eventId, pageIndex, index, count, indent}.
+  // index === 0 es el primero, index === count - 1 el último, indent > 0 es anidado.
+  summary: (p, ctx) => `(${p.target.x}, ${p.target.y}) #${ctx.index + 1}/${ctx.count}`,
 });
 // Omite `fields` para un comando de script libre (params.script).
 // Tipos de campo: number, text, select, checkbox, switch, variable,
 //   coordinate (fuente Direct/Variables de Transfer-Player), record (recordKind),
-//   event, graphic (subcarpeta), audio (categoría). Cualquier campo: disabled/hidden(params).
+//   event, graphic (subcarpeta), audio (categoría). Cualquier campo: disabled/hidden(params, ctx).
 // Aparece en tu propia pestaña con nombre (desde `page`) con icono de puzle en el picker; se
 // guarda como comando Script código-355 que corre el texto literal — sin dispatcher de runtime.
 ```
