@@ -30,6 +30,10 @@ examples/mods/
 | [`event-inspector`](mods/event-inspector/) | Inspect / clone events via map-event context menu |
 | [`quick-tools`](mods/quick-tools/) | View toggle shortcuts + fill-layer with undo grouping |
 | [`discord-rich-presence`](mods/discord-rich-presence/) | Discord status: project, current map, elapsed time |
+| [`custom-event-commands`](mods/custom-event-commands/) | New event commands on their own picker page (`ctx.events.registerCommand`) |
+| [`custom-tile-properties`](mods/custom-tile-properties/) | Custom terrain tags + tile priorities in the Tileset Editor dropdowns |
+| [`custom-theme`](mods/custom-theme/) | A full editor theme with dark + light variants (`ctx.theme`) |
+| [`script-bridge`](mods/script-bridge/) | Teaches the simulator common Ruby one-liners (`ctx.simulator`) and marks which Script rows it can run (`ctx.ui.decorate` + `ctx.ui.registerSlot`) |
 
 ## How to run an example locally
 
@@ -57,6 +61,7 @@ examples/mods/
 Each example uses a small slice of the Mod API exposed through `ctx`:
 `ctx.editor`, `ctx.map`, `ctx.tileset`, `ctx.events`, `ctx.tools`, `ctx.menu`,
 `ctx.commands`, `ctx.ui`, `ctx.bus`, `ctx.fs`, `ctx.storage`, `ctx.log`,
-`ctx.lifecycle`, `ctx.stats`, `ctx.keybinds`, `ctx.selectors`, `ctx.projectData`.
+`ctx.lifecycle`, `ctx.stats`, `ctx.keybinds`, `ctx.selectors`, `ctx.projectData`,
+`ctx.theme`, `ctx.simulator`.
 
 For the full method reference, event payloads, and TypeScript types, see **[../docs/](../docs/)**. Reading one or two examples in tandem with `docs/api-reference.md` is the fastest way to internalize the surface.

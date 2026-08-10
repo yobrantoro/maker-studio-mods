@@ -12,6 +12,34 @@ Cuando hay un salto de versión major, este archivo recibe una sección con la n
 
 ## Adiciones desde 1.0.0
 
+- **`ctx.ui.decorate(selector, apply)`**: toma el control de cualquier elemento de la interfaz
+  del editor que case con un selector CSS — los que ya están en pantalla **y todos los que se
+  monten después**, así que un diálogo abierto más tarde se decora igual que uno ya abierto. El
+  callback recibe un `HTMLElement` real (añádele cosas, cámbiale el estilo, sustitúyelo con
+  `replaceWith()`) y puede devolver una limpieza, que se ejecuta cuando el elemento sale del DOM
+  o al descargar el mod. Cada elemento se decora una sola vez por decorador, así que los
+  re-renders nunca duplican nada. Un único `MutationObserver` da servicio a todos los decoradores
+  y se desconecta cuando no hay ninguno. `[data-ms-part]` (`dialog`, `menubar`, `toolbar`,
+  `statusbar`, `panel-header`, `canvas`) es el contrato estable de selectores, compartido con el
+  sistema de temas; los nombres de clase de componente funcionan pero son internos. Ver
+  [api-reference.md](./api-reference.md) (`ui` → Extender la interfaz del editor).
+- **`ctx.ui.registerSlot(slot, render, opts?)`**: los puntos de extensión con nombre del editor,
+  para los casos en los que el DOM no basta — el payload lleva ids y setters. `fog.config`,
+  `tileset.editor.tile`, `event.command.form`, `event.command.form.<code>` (uno por código de
+  comando RMXP) y `properties.panel`. `slot.data()` es un getter (el elemento host se reutiliza
+  entre re-renders) y `slot.onUpdate(fn)` avisa cuando cambia; `{ replace: true }` oculta el
+  contenido propio del slot y `{ order: n }` ordena varios registros.
+- **Nuevo sub-contexto `ctx.simulator`**: `registerScriptHandler(match, handler)` se encarga de
+  los Script que el Game Simulator no puede ejecutar — el comando Script (355), un Script dentro
+  de una ruta de movimiento (move code 45) y una condición de tipo Script (kind 12, donde el
+  booleano que devuelve el handler es la respuesta de la condición).
+  `registerCommandHandler(code, handler)` implementa o sustituye un código de comando de evento;
+  los handlers de mod se ejecutan **antes** que la implementación interna, y devolver `false`
+  renuncia. Los handlers reciben un `SimApi` reducido (switches, variables, self switches,
+  `character()`/`characters()`, `wait`, `showText`, `log`) en vez del runtime interno. Un handler
+  que lance una excepción se captura, se registra en el panel del simulador y cuenta como
+  atendido. Ver [api-reference.md](./api-reference.md) (`simulator`).
+
 - **`PanelDef.defaultSize`**: `{ width, height }` (px), fija el tamaño de la ventana flotante
   la primera vez que un panel se abre — antes de tener posición de dock o de que el usuario
   lo redimensione. El valor por defecto no cambia (`{ width: 480, height: 360 }`). Aditivo:

@@ -12,6 +12,33 @@ When a major bump happens, this file gets a section with the new shape and a lin
 
 ## Additions since 1.0.0
 
+- **`ctx.ui.decorate(selector, apply)`**: take over any element of built-in editor UI that
+  matches a CSS selector — the ones on screen now **and every one mounted later**, so a
+  dialog opened later is decorated the same as one already open. The callback receives a real
+  `HTMLElement` (append to it, restyle it, `replaceWith()` it) and may return a cleanup, run
+  when the element leaves the DOM or the mod unloads. Each element is decorated once per
+  decorator, so re-renders never stack duplicates. One `MutationObserver` backs every
+  decorator and stays disconnected while none are registered. `[data-ms-part]` (`dialog`,
+  `menubar`, `toolbar`, `statusbar`, `panel-header`, `canvas`) is the stable selector
+  contract, shared with the theme system; component class names work but are internal. See
+  [api-reference.md](./api-reference.md) (`ui` → Extending built-in editor UI).
+- **`ctx.ui.registerSlot(slot, render, opts?)`**: the editor's named extension points, for
+  the cases where the DOM alone isn't enough — the payload carries ids and setters.
+  `fog.config`, `tileset.editor.tile`, `event.command.form`, `event.command.form.<code>`
+  (one per RMXP command code) and `properties.panel`. `slot.data()` is a getter (the host
+  element is reused across re-renders) and `slot.onUpdate(fn)` fires when it changes;
+  `{ replace: true }` hides the slot's built-in content, `{ order: n }` sorts multiple
+  registrations.
+- **New `ctx.simulator` sub-context**: `registerScriptHandler(match, handler)` claims Script
+  bodies the Game Simulator cannot run — the Script command (355), a move-route Script (move
+  code 45) and a Script conditional branch (kind 12, where the handler's boolean is the
+  branch's answer). `registerCommandHandler(code, handler)` implements or overrides an event
+  command code; mod handlers run **before** the built-in implementation, and returning
+  `false` declines. Handlers receive a narrow `SimApi` (switches, variables, self switches,
+  `character()`/`characters()`, `wait`, `showText`, `log`) rather than the internal runtime.
+  A throwing handler is caught, logged to the simulator panel and counted as handled. See
+  [api-reference.md](./api-reference.md) (`simulator`).
+
 - **`PanelDef.defaultSize`**: `{ width, height }` (px), sets the floating window's size the
   very first time a panel opens — before it has a dock position or the user has resized it.
   Default unchanged (`{ width: 480, height: 360 }`). Additive: mods that don't set it see no

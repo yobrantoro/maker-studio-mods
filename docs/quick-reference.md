@@ -414,6 +414,52 @@ ctx.log.warn("Unexpected state");
 ctx.log.error(err);
 ```
 
+## Add UI to built-in editor screens
+
+```js
+// Anywhere: matches now AND every element mounted later
+ctx.ui.decorate(".fc-popup .fc-actions", (el) => {
+  const row = document.createElement("label");
+  row.innerHTML = "<input type='checkbox'> Snow on this fog";
+  el.before(row);
+  return () => row.remove();
+});
+
+// Replace a read-only readout with an input
+ctx.ui.decorate(".properties-panel .prop-value", (el) => {
+  const input = document.createElement("input");
+  input.value = el.textContent ?? "";
+  el.replaceWith(input);
+});
+
+// Named slot — same idea, but with ids + setters in the payload
+ctx.ui.registerSlot("event.command.form.101", (host, slot) => {
+  const btn = document.createElement("button");
+  btn.textContent = "Insert greeting";
+  btn.onclick = () => slot.data().setParameter(0, "Hello there!");
+  host.appendChild(btn);
+});
+```
+
+Slots: `fog.config`, `tileset.editor.tile`, `event.command.form[.<code>]`,
+`properties.panel`. `{ replace: true }` hides the built-in content.
+
+## Teach the simulator a Script command
+
+```js
+ctx.simulator.registerScriptHandler("pbSetSwitch", (script, sim) => {
+  const m = script.match(/pbSetSwitch\((\d+),\s*(\w+)\)/);
+  if (!m) return null;                 // decline
+  sim.setSwitch(Number(m[1]), m[2] === "true");
+});
+
+// Also handles move-route Scripts and Script conditional branches
+// (return true/false there). Or claim a whole command code:
+ctx.simulator.registerCommandHandler(201, (params, sim) => {
+  sim.log(`transfer to map ${params[1]}`);
+});
+```
+
 ## Query installed mods / plugins (runtime)
 
 ```js

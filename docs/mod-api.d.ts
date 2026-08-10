@@ -1062,6 +1062,93 @@ export interface UiCtx {
    *  listening for a keypress, as if the user had clicked it — e.g. from a toast's
    *  "Assign shortcut" button. Omit it to just open the plain list. */
   openKeyboardShortcuts?(actionId?: string): void;
+  /** Inject UI into a **named extension point inside built-in editor UI** — a
+   *  checkbox in the fog dialog, a field in the Tileset Editor, a button in an
+   *  event command form. See `ModSlotId` for the slots and their payloads.
+   *
+   *  ```js
+   *  ctx.ui.registerSlot("fog.config", (host, slot) => {
+   *    const label = document.createElement("label");
+   *    label.textContent = "My option";
+   *    host.appendChild(label);
+   *    return () => label.remove();          // optional cleanup
+   *  });
+   *  ```
+   *
+   *  Pass `{ replace: true }` to hide the slot's built-in content and render
+   *  only yours — that is how a read-only readout becomes an editable input. */
+  registerSlot?(slot: ModSlotId | string, render: ModSlotRenderer, opts?: ModSlotOptions): Disposable;
+  /** Take over any element of built-in editor UI that matches a CSS selector —
+   *  now **and every one mounted later**, so a dialog opened later is decorated
+   *  the same as one already open. Unlike `registerSlot` this needs no
+   *  extension point in the editor, so it reaches anywhere.
+   *
+   *  ```js
+   *  // A checkbox in every fog dialog
+   *  ctx.ui.decorate(".fc-popup .fc-actions", (el) => {
+   *    const row = document.createElement("label");
+   *    row.innerHTML = "<input type='checkbox'> My option";
+   *    el.before(row);
+   *    return () => row.remove();          // optional cleanup
+   *  });
+   *
+   *  // Turn a read-only readout into an input
+   *  ctx.ui.decorate(".properties-panel .prop-value", (el) => {
+   *    const input = document.createElement("input");
+   *    input.value = el.textContent ?? "";
+   *    el.replaceWith(input);
+   *  });
+   *  ```
+   *
+   *  `[data-ms-part]` (`dialog`, `menubar`, `toolbar`, `statusbar`,
+   *  `panel-header`, `canvas`) is a **stable** contract shared with the theme
+   *  system. Component class names work too, but they are internal and can
+   *  change between releases. */
+  decorate?(selector: string, apply: ModDecorator): Disposable;
+}
+
+/** Runs once per element matching a `ui.decorate` selector. Return a cleanup to
+ *  run when the element is removed or the mod unloads. */
+export type ModDecorator = (el: HTMLElement, info: { selector: string }) => void | (() => void);
+
+// ============================================================================
+// UI extension points (slots)
+// ============================================================================
+
+/** Built-in slot ids. `event.command.form.<code>` also exists, one per RMXP
+ *  command code — `"event.command.form.101"` is the Show Text form. */
+export type ModSlotId =
+  /** Edit Fog / Panorama / layer-group popup, above the footer.
+   *  data: `{ groupKey, mapId, layerId }` */
+  | "fog.config"
+  /** Tileset Editor, under the selected tile's properties.
+   *  data: `{ tilesetId, tileId }` */
+  | "tileset.editor.tile"
+  /** Every event command parameter form, above the footer.
+   *  data: `{ code, parameters, setParameter(index, value) }` */
+  | "event.command.form"
+  /** Properties panel body — wraps the built-in rows, so `replace` swaps them.
+   *  data: `{ mapId, x, y, tileId }` */
+  | "properties.panel";
+
+export interface ModSlotHost {
+  /** The slot this render call is for. */
+  slot: string;
+  /** The slot's live payload. **Call it every time** — one host element is
+   *  reused across re-renders, so a cached value goes stale. */
+  data(): Record<string, unknown>;
+  /** Runs whenever the payload changes. Returns an unsubscribe. */
+  onUpdate(fn: () => void): () => void;
+}
+
+/** Renders into `host`. Return a cleanup to run when the slot goes away. */
+export type ModSlotRenderer = (host: HTMLElement, slot: ModSlotHost) => void | (() => void);
+
+export interface ModSlotOptions {
+  /** Hide the slot's built-in content and show only this mod's. */
+  replace?: boolean;
+  /** Sort order among a slot's registrations (default 0). */
+  order?: number;
 }
 
 export interface ContextMenuItemDef {
@@ -1740,7 +1827,90 @@ export interface ModContext {
   mods: ModsCtx;
   /** Query installed Essentials plugins (under `<gameRoot>/Plugins/`) at runtime. */
   plugins: PluginsCtx;
+  /** Teach the Game Simulator behaviour it does not have — Script commands
+   *  above all. */
+  simulator: SimulatorCtx;
 }
+
+// ============================================================================
+// Simulator extensions
+// ============================================================================
+
+/** A character in the running simulation. Positions are tile coords. */
+export interface SimCharacterView {
+  /** -1 for the player, else the event id. */
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  direction: 2 | 4 | 6 | 8;
+  moving: boolean;
+  erased: boolean;
+  setPosition(x: number, y: number): void;
+  setDirection(dir: 2 | 4 | 6 | 8): void;
+  setTransparent(on: boolean): void;
+  setThrough(on: boolean): void;
+}
+
+/** The running simulation, as a handler sees it. */
+export interface SimApi {
+  /** Sim frame counter. */
+  frame: number;
+  /** Event running the command — null for the main scenario, -1 for the player. */
+  eventId: number | null;
+  mapId: number;
+  getSwitch(id: number): boolean;
+  setSwitch(id: number, value: boolean): void;
+  getVariable(id: number): number;
+  setVariable(id: number, value: number): void;
+  /** Self switch of `eventId` (defaults to the event running the command). */
+  getSelfSwitch(letter: string, eventId?: number): boolean;
+  setSelfSwitch(letter: string, value: boolean, eventId?: number): void;
+  /** -1 player, 0 the event running the command, else an event id. */
+  character(target: number): SimCharacterView | null;
+  characters(): SimCharacterView[];
+  /** Hold the interpreter for `frames` sim frames before the next command. */
+  wait(frames: number): void;
+  /** Show a message box, exactly as Show Text does. */
+  showText(lines: string[]): void;
+  /** Append a row to the simulator's log panel. */
+  log(message: string, level?: "info" | "warn" | "unsupported"): void;
+}
+
+/** Runs a Script. Return a boolean to answer a Script conditional branch;
+ *  return `null` to decline so the next handler (or the built-in "unsupported"
+ *  path) takes it. Anything else counts as handled. */
+export type SimScriptHandler = (script: string, api: SimApi) => boolean | void | null;
+
+/** Runs an event command. Return `false` to decline and fall through. */
+export type SimCommandHandler = (parameters: unknown[], api: SimApi) => boolean | void;
+
+export interface SimulatorCtx {
+  /**
+   * Claim Script bodies the simulator cannot run: the Script command (355), a
+   * move-route Script (move code 45) and a Script conditional branch (kind 12).
+   *
+   * `match` narrows what reaches the handler — a string matches scripts that
+   * START with it, a RegExp is tested against the whole body, a predicate does
+   * whatever you want. Omit it to see every script.
+   *
+   * ```js
+   * ctx.simulator.registerScriptHandler("pbSetSwitch", (script, sim) => {
+   *   const [, id, val] = script.match(/pbSetSwitch\((\d+),\s*(\w+)\)/) ?? [];
+   *   if (!id) return null;                  // decline — not ours after all
+   *   sim.setSwitch(Number(id), val === "true");
+   * });
+   * ```
+   */
+  registerScriptHandler(
+    match: string | RegExp | ((script: string) => boolean) | undefined,
+    handler: SimScriptHandler,
+  ): Disposable;
+  /** Implement (or override) an event command code in the simulator. Mod
+   *  handlers run BEFORE the built-in implementation. */
+  registerCommandHandler(code: number, handler: SimCommandHandler): Disposable;
+}
+
 
 // ============================================================================
 // Mod module shape

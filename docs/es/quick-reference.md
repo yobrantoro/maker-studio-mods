@@ -411,6 +411,52 @@ ctx.log.warn("Unexpected state");
 ctx.log.error(err);
 ```
 
+## Añadir interfaz a pantallas ya existentes del editor
+
+```js
+// En cualquier sitio: casa ahora Y con todo lo que se monte después
+ctx.ui.decorate(".fc-popup .fc-actions", (el) => {
+  const row = document.createElement("label");
+  row.innerHTML = "<input type='checkbox'> Nieve en esta fog";
+  el.before(row);
+  return () => row.remove();
+});
+
+// Sustituir un valor de solo lectura por un campo editable
+ctx.ui.decorate(".properties-panel .prop-value", (el) => {
+  const input = document.createElement("input");
+  input.value = el.textContent ?? "";
+  el.replaceWith(input);
+});
+
+// Slot con nombre: lo mismo, pero con ids y setters en el payload
+ctx.ui.registerSlot("event.command.form.101", (host, slot) => {
+  const btn = document.createElement("button");
+  btn.textContent = "Insertar saludo";
+  btn.onclick = () => slot.data().setParameter(0, "Hola!");
+  host.appendChild(btn);
+});
+```
+
+Slots: `fog.config`, `tileset.editor.tile`, `event.command.form[.<code>]`,
+`properties.panel`. `{ replace: true }` oculta el contenido propio del slot.
+
+## Enseñar un comando Script al simulador
+
+```js
+ctx.simulator.registerScriptHandler("pbSetSwitch", (script, sim) => {
+  const m = script.match(/pbSetSwitch\((\d+),\s*(\w+)\)/);
+  if (!m) return null;                 // renuncia
+  sim.setSwitch(Number(m[1]), m[2] === "true");
+});
+
+// También cubre los Script de ruta de movimiento y las condiciones de tipo
+// Script (ahí devuelve true/false). O quédate un código entero:
+ctx.simulator.registerCommandHandler(201, (params, sim) => {
+  sim.log(`transfer to map ${params[1]}`);
+});
+```
+
 ## Consultar mods / plugins instalados (runtime)
 
 ```js

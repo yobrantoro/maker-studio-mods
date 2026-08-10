@@ -1372,6 +1372,157 @@ no puede apuntar a un atajo registrado por otro mod.
 
 ---
 
+### Extender la interfaz del editor
+
+Dos mecanismos, el general primero.
+
+#### `ui.decorate(selector, apply)` — en cualquier sitio
+
+```ts
+const d = ctx.ui.decorate(".fc-popup .fc-actions", (el, info) => {
+  const row = document.createElement("label");
+  row.innerHTML = "<input type='checkbox'> Nieve en esta fog";
+  el.before(row);
+  return () => row.remove();   // limpieza opcional
+});
+```
+
+Tu callback se ejecuta para **todos los elementos que casen con el selector: los que ya están en
+pantalla y todos los que se monten después**. Si abres el diálogo de Edit Fog dentro de cinco
+minutos, se decora igual que uno que ya estuviera abierto. A partir de ahí tienes un
+`HTMLElement` real: añádele cosas, cámbiale el estilo, engancha listeners o sustitúyelo entero
+con `replaceWith()`.
+
+```ts
+// Convertir un valor de solo lectura en un campo editable
+ctx.ui.decorate(".properties-panel .prop-value", (el) => {
+  const input = document.createElement("input");
+  input.value = el.textContent ?? "";
+  el.replaceWith(input);
+});
+```
+
+Notas:
+
+- El valor devuelto es una limpieza; se ejecuta cuando el elemento sale del DOM **o** cuando se
+  descarta el decorador. Todo lo que hayas añadido debería quitarse ahí.
+- Cada elemento se decora una sola vez por decorador, así que los re-renders nunca duplican nada.
+- Todo se descarta automáticamente al descargar el mod / recargar en caliente.
+- Un único `MutationObserver` da servicio a todos los decoradores y **solo está conectado
+  mientras haya al menos uno registrado**: si tu mod no usa `decorate`, no cuesta nada.
+
+**Elegir un selector.** `[data-ms-part]` es un contrato estable y documentado, compartido con el
+sistema de temas: `dialog`, `menubar`, `toolbar`, `statusbar`, `panel-header`, `canvas`. Los
+nombres de clase de los componentes (`.fc-popup`, `.cpf-body`, `.ts-sidebar-section`,
+`.prop-value`, …) también funcionan y son los que más usarás, pero son **internos** y pueden
+cambiar entre versiones.
+
+#### `ui.registerSlot(slot, render, opts?)` — puntos con nombre y datos
+
+```ts
+ctx.ui.registerSlot("event.command.form.101", (host, slot) => {
+  const btn = document.createElement("button");
+  btn.textContent = "Insertar saludo";
+  btn.onclick = () => slot.data().setParameter(0, "Hola!");
+  host.appendChild(btn);
+});
+```
+
+Los slots son los pocos puntos que el editor declara explícitamente, y su ventaja frente a
+`decorate` es el **payload**: ids y setters que el DOM no puede darte.
+
+| Slot | Dónde | `slot.data()` |
+|------|-------|---------------|
+| `fog.config` | popup de Edit Fog / Panorama / grupo de capas, encima del footer | `{ groupKey, mapId, layerId }` |
+| `tileset.editor.tile` | barra lateral del Tileset Editor | `{ tilesetId, mode, hoverCell, selectedCells }` |
+| `event.command.form` | todos los formularios de comando de evento | `{ code, parameters, setParameter(i, v) }` |
+| `event.command.form.<code>` | un formulario concreto (`.101` = Show Text) | igual |
+| `properties.panel` | cuerpo del panel Tile Info | `{ tileId, tilesetId, priority, terrainTag, passable, isBush, isCounter }` |
+
+- `slot.data()` es un **getter**: el elemento host se reutiliza entre re-renders, así que llámalo
+  cada vez en lugar de cachearlo. `slot.onUpdate(fn)` se dispara cuando cambia el payload.
+- `{ replace: true }` oculta el contenido propio del slot y muestra solo el tuyo.
+- `{ order: n }` ordena varios registros en el mismo slot.
+
+Ejemplo completo de los dos mecanismos juntos: [`script-bridge`](../../examples/mods/script-bridge/).
+
+---
+
+## `simulator`
+
+El Game Simulator interpreta un subconjunto útil de RMXP. Lo que no puede ejecutar — sobre todo
+los comandos Script, que son Ruby y aquí no hay Ruby — se registra como no soportado. Estos
+hooks permiten que tu mod aporte lo que falta.
+
+```ts
+// Encargarse de un comando Script (355), de un Script dentro de una ruta de
+// movimiento (move code 45) o de una condición de tipo Script (kind 12).
+ctx.simulator.registerScriptHandler("pbSetSwitch", (script, sim) => {
+  const m = script.match(/pbSetSwitch\((\d+),\s*(\w+)\)/);
+  if (!m) return null;                       // renuncia: que lo intente otro
+  sim.setSwitch(Number(m[1]), m[2] === "true");
+});
+
+// Implementar (o sustituir) un código de comando de evento.
+ctx.simulator.registerCommandHandler(201, (params, sim) => {
+  sim.log(`transfer to map ${params[1]}`);
+});
+```
+
+`match` filtra lo que llega a un handler de script: un **string** casa con los scripts que
+*empiezan* por él, una **RegExp** se prueba contra todo el cuerpo, un **predicado** hace lo que
+quieras, y si lo omites lo ves todo.
+
+| Devuelve | Significado |
+|----------|-------------|
+| `null` | Renuncia — lo coge el siguiente handler (y luego el camino interno) |
+| `true` / `false` | La respuesta de una **condición de tipo Script**; también cuenta como atendido |
+| cualquier otra cosa | Atendido |
+
+Los handlers de `registerCommandHandler` se ejecutan **antes** que la implementación interna, así
+que puedes sustituir un código que el simulador ya soporta; devuelve `false` para renunciar.
+
+### `SimApi`
+
+El segundo argumento es una vista reducida de la simulación en marcha; el runtime interno nunca
+se expone.
+
+```ts
+interface SimApi {
+  frame: number;                  // contador de frames del simulador
+  eventId: number | null;         // evento que ejecuta el comando (-1 = jugador)
+  mapId: number;
+  getSwitch(id): boolean;         setSwitch(id, value): void;
+  getVariable(id): number;        setVariable(id, value): void;
+  getSelfSwitch(letter, eventId?): boolean;
+  setSelfSwitch(letter, value, eventId?): void;
+  character(target): SimCharacterView | null;   // -1 jugador, 0 este evento, N id de evento
+  characters(): SimCharacterView[];
+  wait(frames): void;             // detiene el intérprete
+  showText(lines): void;          // caja de mensaje, como Show Text
+  log(message, level?): void;     // una fila en el panel de log del simulador
+}
+
+interface SimCharacterView {
+  id: number; name: string; x: number; y: number;
+  direction: 2 | 4 | 6 | 8; moving: boolean; erased: boolean;
+  setPosition(x, y): void; setDirection(dir): void;
+  setTransparent(on): void; setThrough(on): void;
+}
+```
+
+Los cambios de switch y variable se aplican en el siguiente tick, cuando el simulador reevalúa
+las condiciones de página. Si un handler lanza una excepción se captura, se registra en el panel
+del simulador y cuenta como atendido, así que un mod roto no puede bloquear la simulación. Todos
+los handlers se descartan al descargar el mod.
+
+Mira el mod de ejemplo [`script-bridge`](../../examples/mods/script-bridge/): registra un handler
+para una tabla de one-liners de Ruby habituales, implementa Change Gold y marca las filas Script
+que puede ejecutar — un ejemplo completo de `ctx.simulator` junto a `ui.decorate` y
+`ui.registerSlot`.
+
+---
+
 ## `keybinds`
 
 ```ts

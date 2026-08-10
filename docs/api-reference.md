@@ -27,7 +27,7 @@ All mod capabilities are reached through it.
 | `tools`      | `ToolsCtx`            | Register custom editing tools. |
 | `menu`       | `MenuCtx`             | Add menu items. |
 | `commands`   | `CommandsCtx`         | Cross-mod command registry. |
-| `ui`         | `UiCtx`               | Panels, dialogs, toasts. |
+| `ui`         | `UiCtx`               | Panels, dialogs, toasts, and injecting UI into built-in editor screens. |
 | `bus`        | `BusCtx`              | Subscribe to / emit events. |
 | `fs`         | `FsCtx`               | Path-scoped filesystem. |
 | `storage`    | `StorageCtx`          | Per-mod persistent K/V. |
@@ -39,6 +39,7 @@ All mod capabilities are reached through it.
 | `projectData`| `ProjectDataCtx`      | Read-only RPG record lists (actors, items, switches, …). |
 | `mods`       | `ModsCtx`             | Query other installed mods (presence, status). |
 | `plugins`    | `PluginsCtx`          | Query installed Essentials plugins. |
+| `simulator`  | `SimulatorCtx`        | Teach the Game Simulator Script commands and unimplemented codes. |
 | `log`        | `LogCtx`              | Namespaced logger. |
 | `lifecycle`  | `LifecycleCtx`        | Activation hooks. |
 
@@ -1371,6 +1372,170 @@ already scrolled to that row and **listening for a keypress**, exactly as if the
 clicked it — pairs well with a toast [action button](#toast-action-buttons) offering
 "Assign shortcut" for an action that doesn't have one yet. Only matches the built-in action
 ids `ctx.keybinds` knows about — it can't target a mod-registered menu shortcut.
+
+### Extending built-in editor UI
+
+Two ways in, and you want the first one most of the time.
+
+#### `ui.decorate(selector, apply)` — anywhere
+
+```ts
+const d = ctx.ui.decorate(".fc-popup .fc-actions", (el, info) => {
+  const row = document.createElement("label");
+  row.innerHTML = "<input type='checkbox'> Snow on this fog";
+  el.before(row);
+  return () => row.remove();   // optional cleanup
+});
+```
+
+Your callback runs for **every element matching the selector — the ones on screen now, and
+every one mounted later**. Open the Edit Fog dialog five minutes from now and it is decorated
+the same as one already open. From there you hold a real `HTMLElement`: append to it, restyle
+it, wire listeners, or `replaceWith()` it entirely.
+
+```ts
+// Turn a read-only readout into an editable input
+ctx.ui.decorate(".properties-panel .prop-value", (el) => {
+  const input = document.createElement("input");
+  input.value = el.textContent ?? "";
+  el.replaceWith(input);
+});
+
+// A button in the Show Text command form that fills the field in
+ctx.ui.decorate(".cpf-body textarea", (el) => {
+  const btn = document.createElement("button");
+  btn.textContent = "Insert player name";
+  btn.onclick = () => { (el as HTMLTextAreaElement).value += "\PN"; };
+  el.after(btn);
+  return () => btn.remove();
+});
+```
+
+Notes:
+
+- Return value is a cleanup, run when the element leaves the DOM **or** the decorator is
+  disposed. Anything you appended should be removed there.
+- Each element is decorated once per decorator, so re-renders never stack duplicates.
+- Everything is disposed automatically on mod unload / hot reload.
+- One `MutationObserver` backs every decorator and is **only connected while at least one is
+  registered** — mods that never call `decorate` cost nothing.
+
+**Picking a selector.** `[data-ms-part]` is a stable, documented contract shared with the
+theme system: `dialog`, `menubar`, `toolbar`, `statusbar`, `panel-header`, `canvas`.
+Component class names (`.fc-popup`, `.cpf-body`, `.ts-sidebar-section`, `.prop-value`, …)
+work too and are what you'll reach for most, but they are **internal** and can change
+between releases — pin your mod's compatibility accordingly, and prefer a selector that will
+fail visibly over one that silently matches the wrong thing.
+
+#### `ui.registerSlot(slot, render, opts?)` — named points, with data
+
+```ts
+ctx.ui.registerSlot("event.command.form.101", (host, slot) => {
+  const btn = document.createElement("button");
+  btn.textContent = "Insert greeting";
+  btn.onclick = () => {
+    const { setParameter } = slot.data() as { setParameter(i: number, v: unknown): void };
+    setParameter(0, "Hello there!");
+  };
+  host.appendChild(btn);
+});
+```
+
+Slots are the few places the editor declares explicitly, and their advantage over `decorate`
+is the **payload**: ids and setters the DOM cannot give you.
+
+| Slot | Where | `slot.data()` |
+|------|-------|---------------|
+| `fog.config` | Edit Fog / Panorama / layer-group popup, above the footer | `{ groupKey, mapId, layerId }` |
+| `tileset.editor.tile` | Tileset Editor sidebar | `{ tilesetId, mode, hoverCell, selectedCells }` |
+| `event.command.form` | every event command form | `{ code, parameters, setParameter(i, v) }` |
+| `event.command.form.<code>` | one command form (e.g. `.101` = Show Text) | same |
+| `properties.panel` | Tile Info panel body | `{ tileId, tilesetId, priority, terrainTag, passable, isBush, isCounter }` |
+
+- `slot.data()` is a **getter** — one host element is reused across re-renders, so call it
+  each time instead of caching. `slot.onUpdate(fn)` fires when the payload changes.
+- `{ replace: true }` hides the slot's built-in content and shows only yours (`properties.panel`
+  wraps its rows, so this swaps the whole readout).
+- `{ order: n }` sorts multiple registrations on the same slot.
+
+Worked example of both mechanisms side by side: [`script-bridge`](../examples/mods/script-bridge/).
+
+
+---
+
+## `simulator`
+
+The Game Simulator interprets a useful subset of RMXP. What it cannot run — Script commands
+above all, since those are Ruby and there is no Ruby here — is logged as unsupported. These
+hooks let your mod supply the missing behaviour.
+
+```ts
+// Claim a Script command (355), a move-route Script (move code 45),
+// or a Script conditional branch (kind 12).
+ctx.simulator.registerScriptHandler("pbSetSwitch", (script, sim) => {
+  const m = script.match(/pbSetSwitch\((\d+),\s*(\w+)\)/);
+  if (!m) return null;                       // decline — let others try
+  sim.setSwitch(Number(m[1]), m[2] === "true");
+});
+
+// Implement (or override) an event command code.
+ctx.simulator.registerCommandHandler(201, (params, sim) => {
+  sim.log(`transfer to map ${params[1]}`);
+});
+```
+
+`match` narrows what reaches a script handler: a **string** matches scripts that *start* with
+it, a **RegExp** is tested against the whole body, a **predicate** does whatever you want,
+and omitting it sees every script.
+
+Return values:
+
+| Return | Meaning |
+|--------|---------|
+| `null` | Declined — the next handler (then the built-in path) takes it |
+| `true` / `false` | The answer for a **Script conditional branch**; also counts as handled |
+| anything else | Handled |
+
+`registerCommandHandler` handlers run **before** the built-in implementation, so a code the
+simulator already supports can be replaced; return `false` to decline and fall through.
+
+### `SimApi`
+
+The second argument is a narrow view of the running simulation — the internal runtime is
+never handed out.
+
+```ts
+interface SimApi {
+  frame: number;                  // sim frame counter
+  eventId: number | null;         // event running the command (-1 = player)
+  mapId: number;
+  getSwitch(id): boolean;         setSwitch(id, value): void;
+  getVariable(id): number;        setVariable(id, value): void;
+  getSelfSwitch(letter, eventId?): boolean;
+  setSelfSwitch(letter, value, eventId?): void;
+  character(target): SimCharacterView | null;   // -1 player, 0 this event, N event id
+  characters(): SimCharacterView[];
+  wait(frames): void;             // hold the interpreter
+  showText(lines): void;          // message box, like Show Text
+  log(message, level?): void;     // a row in the simulator log panel
+}
+
+interface SimCharacterView {
+  id: number; name: string; x: number; y: number;
+  direction: 2 | 4 | 6 | 8; moving: boolean; erased: boolean;
+  setPosition(x, y): void; setDirection(dir): void;
+  setTransparent(on): void; setThrough(on): void;
+}
+```
+
+Switch / variable writes take effect on the next tick, when the simulator re-evaluates page
+conditions. A handler that throws is caught, logged to the simulator panel and counted as
+handled, so a broken mod cannot wedge the simulation. Every handler is disposed on mod
+unload.
+
+See the [`script-bridge`](../examples/mods/script-bridge/) example mod: it registers one handler
+for a table of common Ruby one-liners, implements Change Gold, and badges the Script rows it can
+run — a worked example of `ctx.simulator` together with `ui.decorate` and `ui.registerSlot`.
 
 ---
 
