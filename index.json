@@ -1,7 +1,7 @@
 {
   "$schema": "./schema/index.schema.json",
   "schemaVersion": 2,
-  "updatedAt": "2026-08-10T15:47:05Z",
+  "updatedAt": "2026-08-12T19:29:35Z",
   "mods": [
     {
       "id": "com.toskan4134.discord-rich-presence",
@@ -231,6 +231,21 @@
       "tags": ["ui", "translation", "i18n"],
       "homepage": "https://github.com/Bird-South/ms-zh-cn",
       "apiVersion": "1.0.0"
+    },
+    {
+      "id": "com.yobrantoro.interfaces",
+      "name": "Editor de Interfaces",
+      "authors": [{ "name": "yobrantoro", "url": "https://github.com/yobrantoro" }],
+      "repo": "yobrantoro/ms-interfaces",
+      "version": "1.0.0",
+      "assetName": "com.yobrantoro.interfaces-1.0.0.zip",
+      "sha256": "a79066ee04661c0fc346b8af903b53b095ec3e7068130d5227e6064d402ba979",
+      "description": "Visual screen editor for Pokemon Essentials projects: place images, text, buttons, HP bars and party Pokemon by dragging, with entry animations and live game data. Saves to UI/<name>.json, no recompile needed to see changes.",
+      "tags": ["essentials", "ui", "editor", "pokemon", "rpg-maker-xp"],
+      "icon": "https://raw.githubusercontent.com/yobrantoro/ms-interfaces/main/icon.png",
+      "homepage": "https://github.com/yobrantoro/ms-interfaces",
+      "apiVersion": "1.0.0",
+      "permissions": ["fs.project", "fs.write.project", "ui.dialogs", "ui.toasts"]
     }
   ]
 }
