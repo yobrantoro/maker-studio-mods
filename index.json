@@ -249,9 +249,9 @@
         }
       ],
       "repo": "yobrantoro/ms-interfaces",
-      "version": "1.5.1",
-      "assetName": "com.soysandi.interfaces-1.5.1.zip",
-      "sha256": "2f333e8610daedef47e73bed0dea36c9bdabe86646e71d3bc26e4724065b0898",
+      "version": "1.6.1",
+      "assetName": "com.soysandi.interfaces-1.6.1.zip",
+      "sha256": "36b541dfca5611f4eca5aa93f9693449da58697991ebe2aed583cdae8f07e788",
       "description": "Visual screen editor for Pokemon Essentials projects: place images, text, buttons, HP bars and party Pokemon by dragging, with entry animations and live game data. Saves to UI/<name>.json, no recompile needed to see changes.",
       "tags": [
         "essentials",
