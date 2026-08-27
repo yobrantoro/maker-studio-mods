@@ -241,6 +241,35 @@
       "apiVersion": "1.0.0"
     },
     {
+      "id": "com.soysandi.tema",
+      "name": "Aspecto de Maker Studio",
+      "authors": [
+        {
+          "name": "SoySandi"
+        }
+      ],
+      "repo": "yobrantoro/ms-aspecto",
+      "version": "1.0.4",
+      "assetName": "com.soysandi.tema-1.0.4.zip",
+      "sha256": "3485896019c3e13a30f6c47e2a30ca8f0a2ff8ef66a498853224fa190ee646e1",
+      "description": "Change how the editor looks: colors, font, corners and size. Five palettes plus your own (build one from a single color), load any font from your computer, and it warns with real WCAG contrast when something would be unreadable.",
+      "tags": [
+        "editor",
+        "theme",
+        "appearance",
+        "colors",
+        "fonts",
+        "customization"
+      ],
+      "icon": "https://raw.githubusercontent.com/yobrantoro/ms-aspecto/main/icon.png",
+      "apiVersion": "1.0.0",
+      "permissions": [
+        "ui.dialogs",
+        "ui.toasts",
+        "fs.project"
+      ]
+    },
+    {
       "id": "com.soysandi.interfaces",
       "name": "Editor de Interfaces",
       "authors": [
